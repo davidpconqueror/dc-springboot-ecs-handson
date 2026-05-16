@@ -1,20 +1,31 @@
-package com.example.springbootawsdeploy;
+version: 0.2
 
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+phases:
+  pre_build:
+    commands:
+      - echo Logging in to Amazon ECR....
+      - aws --version
+      - aws ecr get-login-password --region ap-south-1 | docker login --username AWS --password-stdin 258975980349.dkr.ecr.ap-south-1.amazonaws.com
+      - REPOSITORY_URI=258975980349.dkr.ecr.ap-south-1.amazonaws.com/spring-demo-ecr
+      - IMAGE_TAG=build-$(echo $CODEBUILD_BUILD_ID | awk -F":" '{print $2}')
+  build:
+    commands:
+      - echo Build started on `date`
+      - echo Building the Docker image...
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo Build completed on `date`
+      - echo Pushing the Docker images to ECR...
+      - docker push $REPOSITORY_URI:latest
+      - docker push $REPOSITORY_URI:$IMAGE_TAG
+      - echo Writing image definitions file for ECS deployment...
+      - DOCKER_CONTAINER_NAME=spring-demo-ecr
+      - printf '[{"name":"%s","imageUri":"%s"}]' $DOCKER_CONTAINER_NAME $REPOSITORY_URI:$IMAGE_TAG > imagedefinitions.json
+      - echo printing imagedefinitions.json
+      - cat imagedefinitions.json
 
-@RestController
-@RequestMapping("/demo")
-public class TestController {
-    @GetMapping("/data")
-    public String getData() {
-        return "Project_1 message from AWS Ecs";
-    }
-
-    @GetMapping("/message")
-    public String getMessage() {
-        return "Project_2 message from AWS Ecs";
-    }
-}
-
+artifacts:
+  files:
+    - imagedefinitions.json
